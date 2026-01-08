@@ -121,7 +121,7 @@ jobs:
         with:
           tag_name: v${{ github.run_number }}
           name: Release v${{ github.run_number }}
-          draft: true
+          draft: false
           files: |
             artifacts/**/*.dmg
             artifacts/**/*.exe
