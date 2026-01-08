@@ -1,0 +1,42 @@
+[package]
+name = "herculean-desktop"
+version = "0.1.0"
+description = "Herculean Desktop - Run AI assistants locally with Docker"
+authors = ["Herculean AI <team@herculean.ai>"]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/Herculean-AI/DOWNLOAD_ASSISTANT"
+
+[lib]
+name = "herculean_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-http = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-process = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+futures = "0.3"
+dirs = "5"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "1"
+opener = "0.7"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# macOS specific if needed
+
+[target.'cfg(target_os = "windows")'.dependencies]
+# Windows specific if needed
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Linux specific if needed
