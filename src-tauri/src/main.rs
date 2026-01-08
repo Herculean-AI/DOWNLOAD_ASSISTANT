@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    herculean_desktop_temp_lib::run()
+    herculean_desktop_lib::run()
 }

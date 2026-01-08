@@ -11,7 +11,6 @@ mod error;
 use assistant::{Assistant, AssistantManager, AssistantStatus};
 use docker::DockerManager;
 use container::ContainerManager;
-use error::AppError;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::State;
@@ -111,15 +110,19 @@ async fn start_container(
     state: State<'_, AppState>,
     assistant_id: String,
 ) -> Result<String, String> {
-    let mut manager = state.assistant_manager.lock().map_err(|e| e.to_string())?;
-    let assistant = manager.get(&assistant_id).ok_or("Assistant not found")?;
+    // Get assistant data and drop the lock before async operation
+    let assistant = {
+        let manager = state.assistant_manager.lock().map_err(|e| e.to_string())?;
+        manager.get(&assistant_id).ok_or("Assistant not found")?.clone()
+    };
 
     let container_id = state.container_manager
-        .start_container(assistant)
+        .start_container(&assistant)
         .await
         .map_err(|e| e.to_string())?;
 
-    // Update assistant status
+    // Re-acquire lock to update status
+    let mut manager = state.assistant_manager.lock().map_err(|e| e.to_string())?;
     manager.update_status(&assistant_id, AssistantStatus::Running, Some(container_id.clone()))
         .map_err(|e| e.to_string())?;
 
@@ -132,16 +135,22 @@ async fn stop_container(
     state: State<'_, AppState>,
     assistant_id: String,
 ) -> Result<(), String> {
-    let mut manager = state.assistant_manager.lock().map_err(|e| e.to_string())?;
-    let assistant = manager.get(&assistant_id).ok_or("Assistant not found")?;
+    // Get container_id and drop the lock before async operation
+    let container_id = {
+        let manager = state.assistant_manager.lock().map_err(|e| e.to_string())?;
+        let assistant = manager.get(&assistant_id).ok_or("Assistant not found")?;
+        assistant.container_id.clone()
+    };
 
-    if let Some(container_id) = &assistant.container_id {
+    if let Some(cid) = container_id {
         state.container_manager
-            .stop_container(container_id)
+            .stop_container(&cid)
             .await
             .map_err(|e| e.to_string())?;
     }
 
+    // Re-acquire lock to update status
+    let mut manager = state.assistant_manager.lock().map_err(|e| e.to_string())?;
     manager.update_status(&assistant_id, AssistantStatus::Stopped, None)
         .map_err(|e| e.to_string())?;
 
@@ -198,17 +207,18 @@ async fn remove_assistant(
     state: State<'_, AppState>,
     id: String,
 ) -> Result<(), String> {
-    // First stop the container if running
-    {
+    // Get container_id and drop the lock before async operation
+    let container_id = {
         let manager = state.assistant_manager.lock().map_err(|e| e.to_string())?;
-        if let Some(assistant) = manager.get(&id) {
-            if let Some(container_id) = &assistant.container_id {
-                let _ = state.container_manager.stop_container(container_id).await;
-            }
-        }
+        manager.get(&id).and_then(|a| a.container_id.clone())
+    };
+
+    // Stop the container if running (after lock is dropped)
+    if let Some(cid) = container_id {
+        let _ = state.container_manager.stop_container(&cid).await;
     }
 
-    // Remove the assistant
+    // Re-acquire lock to remove the assistant
     let mut manager = state.assistant_manager.lock().map_err(|e| e.to_string())?;
     manager.remove(&id).map_err(|e| e.to_string())
 }
@@ -288,7 +298,6 @@ fn parse_import_code(code: &str) -> Result<ImportData, String> {
 }
 
 fn base64_decode(input: &str) -> Result<String, String> {
-    use std::io::Read;
     let bytes = base64_decode_bytes(input.as_bytes())?;
     String::from_utf8(bytes).map_err(|e| e.to_string())
 }
