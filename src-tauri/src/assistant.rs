@@ -296,6 +296,21 @@ impl AssistantManager {
         }
     }
 
+    /// Update assistant VNC enabled flag
+    pub fn update_vnc_enabled(
+        &mut self,
+        id: &str,
+        vnc_enabled: bool,
+    ) -> Result<(), AppError> {
+        if let Some(assistant) = self.get_mut(id) {
+            assistant.vnc_enabled = vnc_enabled;
+            self.save()?;
+            Ok(())
+        } else {
+            Err(AppError::Storage(format!("Assistant {} not found", id)))
+        }
+    }
+
     /// Check if any assistants exist
     pub fn is_empty(&self) -> bool {
         self.storage.assistants.is_empty()

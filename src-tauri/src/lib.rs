@@ -223,12 +223,36 @@ async fn import_assistant(
     let assistant_data = parse_import_code(&import_code)?;
 
     let mut manager = state.assistant_manager.lock().map_err(|e| e.to_string())?;
-    let assistant = manager.add(
+
+    // Create the basic assistant
+    let mut assistant = manager.add(
         assistant_data.name,
         assistant_data.description,
         assistant_data.image,
         assistant_data.port,
     ).map_err(|e| e.to_string())?;
+
+    // Update with additional fields from import code
+    if let Some(env_vars) = assistant_data.env_vars {
+        manager.update_env_vars(&assistant.id, env_vars.clone()).map_err(|e| e.to_string())?;
+        assistant.env_vars = env_vars;
+    }
+
+    // Update vnc_enabled flag
+    if let Some(vnc_enabled) = assistant_data.vnc_enabled {
+        manager.update_vnc_enabled(&assistant.id, vnc_enabled).map_err(|e| e.to_string())?;
+        assistant.vnc_enabled = vnc_enabled;
+    }
+
+    // Update instructions if provided (store in env_vars)
+    if let Some(instructions) = assistant_data.instructions {
+        if !instructions.is_empty() {
+            let mut env_vars = assistant.env_vars.clone();
+            env_vars.insert("INSTRUCTIONS".to_string(), instructions);
+            manager.update_env_vars(&assistant.id, env_vars.clone()).map_err(|e| e.to_string())?;
+            assistant.env_vars = env_vars;
+        }
+    }
 
     Ok(assistant)
 }
@@ -239,6 +263,12 @@ struct ImportData {
     description: String,
     image: String,
     port: u16,
+    #[serde(default)]
+    env_vars: Option<std::collections::HashMap<String, String>>,
+    #[serde(default)]
+    vnc_enabled: Option<bool>,
+    #[serde(default)]
+    instructions: Option<String>,
 }
 
 fn parse_import_code(code: &str) -> Result<ImportData, String> {
