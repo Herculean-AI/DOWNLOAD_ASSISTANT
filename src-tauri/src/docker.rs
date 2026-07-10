@@ -91,58 +91,6 @@ impl DockerManager {
         }
     }
 
-    /// Get platform-specific installation instructions
-    pub fn get_install_instructions() -> String {
-        #[cfg(target_os = "macos")]
-        {
-            return r#"To install Docker Desktop on macOS:
-
-1. Download Docker Desktop from the link provided
-2. Open the downloaded Docker.dmg file
-3. Drag Docker to your Applications folder
-4. Open Docker from Applications
-5. Follow the setup wizard
-6. Grant necessary permissions when prompted
-
-Docker will start automatically after installation."#.to_string();
-        }
-
-        #[cfg(target_os = "windows")]
-        {
-            return r#"To install Docker Desktop on Windows:
-
-1. Download Docker Desktop Installer from the link provided
-2. Run the installer (requires administrator privileges)
-3. Follow the installation wizard
-4. Restart your computer if prompted
-5. Docker Desktop will start automatically
-
-Note: WSL 2 backend is recommended for best performance."#.to_string();
-        }
-
-        #[cfg(target_os = "linux")]
-        {
-            return r#"To install Docker on Linux:
-
-Option 1: Docker Desktop (Ubuntu/Debian/Fedora)
-1. Visit the Docker Desktop for Linux page
-2. Follow the instructions for your distribution
-
-Option 2: Docker Engine (all distributions)
-Run these commands:
-  curl -fsSL https://get.docker.com -o get-docker.sh
-  sudo sh get-docker.sh
-  sudo usermod -aG docker $USER
-
-Then log out and back in."#.to_string();
-        }
-
-        #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-        {
-            return "Please visit https://docs.docker.com/get-docker/ for installation instructions.".to_string();
-        }
-    }
-
     /// Start Docker daemon/Desktop
     pub async fn start_daemon(&self) -> Result<(), AppError> {
         #[cfg(target_os = "macos")]
@@ -206,76 +154,6 @@ Then log out and back in."#.to_string();
             sleep(Duration::from_secs(2)).await;
         }
     }
-
-    /// Check if Docker Desktop is installed (vs just Docker Engine)
-    pub async fn is_desktop_installed(&self) -> bool {
-        #[cfg(target_os = "macos")]
-        {
-            std::path::Path::new("/Applications/Docker.app").exists()
-        }
-
-        #[cfg(target_os = "windows")]
-        {
-            // Check common installation paths
-            let paths = [
-                r"C:\Program Files\Docker\Docker\Docker Desktop.exe",
-                r"C:\Program Files (x86)\Docker\Docker\Docker Desktop.exe",
-            ];
-            paths.iter().any(|p| std::path::Path::new(p).exists())
-        }
-
-        #[cfg(target_os = "linux")]
-        {
-            // Check for Docker Desktop on Linux
-            std::path::Path::new("/opt/docker-desktop").exists()
-                || std::path::Path::new("/usr/bin/docker-desktop").exists()
-        }
-
-        #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-        {
-            false
-        }
-    }
-
-    /// Get Docker system information
-    pub async fn get_system_info(&self) -> Result<DockerInfo, AppError> {
-        let output = Command::new("docker")
-            .args(["system", "info", "--format", "{{json .}}"])
-            .output()
-            .map_err(|e| AppError::Docker(format!("Failed to get Docker info: {}", e)))?;
-
-        if !output.status.success() {
-            return Err(AppError::Docker("Docker info command failed".to_string()));
-        }
-
-        let info_str = String::from_utf8_lossy(&output.stdout);
-        serde_json::from_str(&info_str)
-            .map_err(|e| AppError::Docker(format!("Failed to parse Docker info: {}", e)))
-    }
-}
-
-/// Docker system information
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "PascalCase")]
-pub struct DockerInfo {
-    #[serde(default)]
-    pub containers: i32,
-    #[serde(default)]
-    pub containers_running: i32,
-    #[serde(default)]
-    pub containers_paused: i32,
-    #[serde(default)]
-    pub containers_stopped: i32,
-    #[serde(default)]
-    pub images: i32,
-    #[serde(default)]
-    pub operating_system: String,
-    #[serde(default)]
-    pub os_type: String,
-    #[serde(default)]
-    pub architecture: String,
-    #[serde(default)]
-    pub mem_total: i64,
 }
 
 #[cfg(test)]
@@ -288,11 +166,5 @@ mod tests {
         assert!(url.is_ok());
         let url = url.unwrap();
         assert!(url.starts_with("http"));
-    }
-
-    #[test]
-    fn test_install_instructions() {
-        let instructions = DockerManager::get_install_instructions();
-        assert!(!instructions.is_empty());
     }
 }

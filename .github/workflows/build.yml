@@ -97,9 +97,14 @@ jobs:
             src-tauri/target/release/bundle/deb/*.deb
           if-no-files-found: warn
 
+  # Publishing a GitHub Release is a MANUAL step (workflow_dispatch only).
+  # Push builds remain pure CI validation; their binaries are inspectable via
+  # the uploaded actions artifacts above. FRONTEND download links resolve
+  # via releases/latest/download/<version-pinned-filename>, so the existing
+  # latest release keeps serving until a new one is published manually.
   release:
     needs: build
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging') && github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write

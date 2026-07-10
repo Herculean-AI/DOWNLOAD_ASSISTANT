@@ -30,14 +30,6 @@ pub struct DockerStatus {
     pub version: Option<String>,
 }
 
-/// Progress update for downloads/installations
-#[derive(Clone, Serialize)]
-pub struct ProgressUpdate {
-    pub stage: String,
-    pub progress: f32,
-    pub message: String,
-}
-
 // ============================================================================
 // Docker Management Commands
 // ============================================================================
@@ -157,19 +149,6 @@ async fn stop_container(
     Ok(())
 }
 
-/// Get container logs
-#[tauri::command]
-async fn get_container_logs(
-    state: State<'_, AppState>,
-    container_id: String,
-    lines: Option<u32>,
-) -> Result<String, String> {
-    state.container_manager
-        .get_logs(&container_id, lines.unwrap_or(100))
-        .await
-        .map_err(|e| e.to_string())
-}
-
 // ============================================================================
 // Assistant Management Commands
 // ============================================================================
@@ -179,13 +158,6 @@ async fn get_container_logs(
 fn get_assistants(state: State<'_, AppState>) -> Result<Vec<Assistant>, String> {
     let manager = state.assistant_manager.lock().map_err(|e| e.to_string())?;
     Ok(manager.list())
-}
-
-/// Get a specific assistant
-#[tauri::command]
-fn get_assistant(state: State<'_, AppState>, id: String) -> Result<Option<Assistant>, String> {
-    let manager = state.assistant_manager.lock().map_err(|e| e.to_string())?;
-    Ok(manager.get(&id).cloned())
 }
 
 /// Add a new assistant
@@ -229,7 +201,7 @@ async fn import_assistant(
     state: State<'_, AppState>,
     import_code: String,
 ) -> Result<Assistant, String> {
-    // Parse the import code (could be a URL or base64 encoded data)
+    // Parse the import code (JSON emitted by the platform's import-code endpoint)
     let assistant_data = parse_import_code(&import_code)?;
 
     let mut manager = state.assistant_manager.lock().map_err(|e| e.to_string())?;
@@ -282,74 +254,8 @@ struct ImportData {
 }
 
 fn parse_import_code(code: &str) -> Result<ImportData, String> {
-    // Try to parse as JSON directly
-    if let Ok(data) = serde_json::from_str::<ImportData>(code) {
-        return Ok(data);
-    }
-
-    // Try to decode as base64
-    if let Ok(decoded) = base64_decode(code) {
-        if let Ok(data) = serde_json::from_str::<ImportData>(&decoded) {
-            return Ok(data);
-        }
-    }
-
-    Err("Invalid import code format".to_string())
-}
-
-fn base64_decode(input: &str) -> Result<String, String> {
-    let bytes = base64_decode_bytes(input.as_bytes())?;
-    String::from_utf8(bytes).map_err(|e| e.to_string())
-}
-
-fn base64_decode_bytes(input: &[u8]) -> Result<Vec<u8>, String> {
-    // Simple base64 decoding
-    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-    let mut output = Vec::new();
-    let mut buffer = 0u32;
-    let mut bits = 0;
-
-    for &byte in input {
-        if byte == b'=' {
-            break;
-        }
-        if byte == b'\n' || byte == b'\r' || byte == b' ' {
-            continue;
-        }
-
-        let value = ALPHABET.iter().position(|&c| c == byte)
-            .ok_or("Invalid base64 character")? as u32;
-
-        buffer = (buffer << 6) | value;
-        bits += 6;
-
-        if bits >= 8 {
-            bits -= 8;
-            output.push((buffer >> bits) as u8);
-            buffer &= (1 << bits) - 1;
-        }
-    }
-
-    Ok(output)
-}
-
-// ============================================================================
-// Utility Commands
-// ============================================================================
-
-/// Get the application data directory
-#[tauri::command]
-fn get_data_dir() -> Result<String, String> {
-    dirs::data_dir()
-        .map(|p| p.join("herculean-desktop").to_string_lossy().to_string())
-        .ok_or_else(|| "Could not determine data directory".to_string())
-}
-
-/// Open URL in system browser
-#[tauri::command]
-async fn open_in_browser(url: String) -> Result<(), String> {
-    opener::open(&url).map_err(|e| e.to_string())
+    serde_json::from_str::<ImportData>(code)
+        .map_err(|_| "Invalid import code format".to_string())
 }
 
 // ============================================================================
@@ -366,9 +272,6 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_http::init())
-        .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_process::init())
         .manage(AppState {
             docker_manager,
             container_manager,
@@ -385,16 +288,11 @@ pub fn run() {
             image_exists,
             start_container,
             stop_container,
-            get_container_logs,
             // Assistant commands
             get_assistants,
-            get_assistant,
             add_assistant,
             remove_assistant,
             import_assistant,
-            // Utility commands
-            get_data_dir,
-            open_in_browser,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

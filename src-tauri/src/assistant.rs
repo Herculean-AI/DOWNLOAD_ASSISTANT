@@ -89,25 +89,6 @@ impl Assistant {
             vnc_enabled: false,
         }
     }
-
-    /// Get the local URL for this assistant
-    pub fn get_url(&self) -> String {
-        format!("http://localhost:{}", self.port)
-    }
-
-    /// Get the WebSocket URL for this assistant
-    pub fn get_ws_url(&self) -> String {
-        format!("ws://localhost:{}/ws", self.port)
-    }
-
-    /// Get the VNC URL if VNC is enabled
-    pub fn get_vnc_url(&self) -> Option<String> {
-        if self.vnc_enabled {
-            Some(format!("http://localhost:{}/novnc/vnc.html", self.port))
-        } else {
-            None
-        }
-    }
 }
 
 /// Storage for assistants
@@ -310,33 +291,6 @@ impl AssistantManager {
             Err(AppError::Storage(format!("Assistant {} not found", id)))
         }
     }
-
-    /// Check if any assistants exist
-    pub fn is_empty(&self) -> bool {
-        self.storage.assistants.is_empty()
-    }
-
-    /// Get count of assistants
-    pub fn count(&self) -> usize {
-        self.storage.assistants.len()
-    }
-
-    /// Find assistants by status
-    pub fn find_by_status(&self, status: AssistantStatus) -> Vec<&Assistant> {
-        self.storage.assistants
-            .iter()
-            .filter(|a| a.status == status)
-            .collect()
-    }
-
-    /// Reset all assistant statuses to Stopped (useful on app startup)
-    pub fn reset_all_statuses(&mut self) -> Result<(), AppError> {
-        for assistant in &mut self.storage.assistants {
-            assistant.status = AssistantStatus::Stopped;
-            assistant.container_id = None;
-        }
-        self.save()
-    }
 }
 
 #[cfg(test)]
@@ -355,19 +309,5 @@ mod tests {
         assert!(!assistant.id.is_empty());
         assert_eq!(assistant.name, "Test Assistant");
         assert_eq!(assistant.status, AssistantStatus::Stopped);
-    }
-
-    #[test]
-    fn test_assistant_urls() {
-        let assistant = Assistant::new(
-            "Test".to_string(),
-            "Test".to_string(),
-            "test:latest".to_string(),
-            8080,
-        );
-
-        assert_eq!(assistant.get_url(), "http://localhost:8080");
-        assert_eq!(assistant.get_ws_url(), "ws://localhost:8080/ws");
-        assert!(assistant.get_vnc_url().is_none());
     }
 }
